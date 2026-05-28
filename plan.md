@@ -32,3 +32,11 @@
 - 실제 프로젝트 ref가 아직 없으므로 `read_only=true`로 먼저 연결한다.
 - PAT 기반 인증을 위해 `SUPABASE_ACCESS_TOKEN` 환경변수 참조를 설정한다.
 - `codex mcp get supabase`로 등록 상태를 확인한다.
+
+## 추가 작업. GitHub 푸시와 프롬프트 보관
+
+- 지금까지 완료한 프론트엔드 목업, 테마 토글, Supabase MCP, DB 초기 구축, Edge Function 배포 기록을 원격 GitHub에 푸시한다.
+- 사용자가 대화에서 전달한 텍스트 프롬프트를 `docs/session-prompts-2026-05-29.md`에 원문 블록으로 보관한다.
+- 이미지 첨부만 있었던 메시지는 원본 이미지 파일이 저장소에 없으므로 첨부 사실과 확인 가능한 맥락을 기록한다.
+- 아직 추적되지 않은 `docs/edge-function-guide-v3.md`도 현재 작업 정보에 포함해 커밋한다.
+- 푸시 전 `git diff --check`, 빌드 검증, 민감정보 패턴 검색을 수행한다.

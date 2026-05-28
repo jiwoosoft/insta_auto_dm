@@ -61,3 +61,14 @@
 - 함수 URL은 `https://rslfcjydihvginylmhrv.supabase.co/functions/v1/instagram-webhook`, `https://rslfcjydihvginylmhrv.supabase.co/functions/v1/test-match`이다.
 - 스모크 테스트에서 `test-match`는 `가격이 얼마인가요?` 입력에 대해 `matched=true`를 반환했다.
 - 스모크 테스트에서 `instagram-webhook`은 검증 토큰 없는 GET 요청에 `403 Forbidden`으로 응답했다.
+
+## 2026-05-29 GitHub 푸시와 프롬프트 보관
+
+- 목표는 지금까지의 커밋과 작업 정보를 GitHub 원격 저장소에 푸시하고, 사용자가 전달한 프롬프트를 별도 문서로 보관하는 것이다.
+- 현재 브랜치는 `main`이고 `origin/main`보다 5개 커밋 앞서 있었다.
+- 원격 저장소는 `https://github.com/jiwoosoft/insta_auto_dm.git`이다.
+- `docs/edge-function-guide-v3.md`는 Edge Function 배포에 사용한 문서지만 아직 untracked 상태라 이번 커밋에 포함한다.
+- 사용자가 실제 토큰 원문을 대화에 붙여 넣은 기록은 없었다. 보관 문서에는 토큰 placeholder와 환경변수명만 포함한다.
+- 이미지 첨부만 있었던 메시지는 원본 이미지 파일 경로가 없어 텍스트 프롬프트와 동일한 방식으로 완전 재현할 수 없다. 보관 문서에는 첨부 사실과 확인 가능한 오류 맥락을 기록한다.
+- 민감정보 패턴 검색 결과 실제 토큰 값은 발견되지 않았고 `META_VERIFY_TOKEN`, `INSTAGRAM_ACCESS_TOKEN` 같은 환경변수명만 확인됐다.
+- 기본 `npm`과 `node`는 Windows 권한 문제로 실패했으나 Codex 번들 Node로 `tsc -b`와 `vite build`를 직접 실행해 빌드가 통과했다.

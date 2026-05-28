@@ -55,3 +55,13 @@
 - [x] `test-match`를 `verify_jwt=false`로 배포.
 - [x] 배포된 Edge Function 목록과 URL 확인.
 - [x] 작업 기록 커밋.
+
+## 추가 체크리스트. GitHub 푸시와 프롬프트 보관
+
+- [x] 현재 브랜치와 원격 저장소 상태 확인.
+- [x] 사용자 텍스트 프롬프트 보관 문서 생성.
+- [x] `edge-function-guide-v3.md` 포함 여부 확인.
+- [x] 민감정보 패턴 검색.
+- [x] 빌드와 diff 검증.
+- [x] 보관 문서와 작업 기록 커밋.
+- [x] `origin/main`으로 푸시.
