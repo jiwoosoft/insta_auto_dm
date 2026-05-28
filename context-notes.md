@@ -49,3 +49,15 @@
 - 작업 후 MCP 설정은 다시 `read_only=true`로 되돌렸다.
 - Supabase security advisor는 4개 public 테이블의 RLS 미설정과 `update_updated_at` 함수 search_path 미고정을 경고했다. 사용자 승인 없이 RLS는 적용하지 않았다.
 - 최종 읽기 검증은 실제 스키마 컬럼인 `match_status`, `send_status`, `incoming_log_id`, `matched_rule_id` 기준으로 통과했다.
+
+## 2026-05-29 Supabase Edge Function 배포
+
+- 목표는 `edge-function-guide-v3.md` 섹션 6의 지시에 따라 `instagram-webhook`, `test-match` Edge Function을 배포하는 것이다.
+- 두 함수 모두 사용자가 명시한 대로 `verify_jwt=false`로 배포한다.
+- 소스코드는 섹션 6-A, 6-B 코드 블록을 그대로 사용하는 것을 기준으로 한다.
+- Supabase MCP `deploy_edge_function`으로 `instagram-webhook` version 1 배포가 성공했고 `verify_jwt=false`, `status=ACTIVE`로 확인했다.
+- Supabase MCP `deploy_edge_function`으로 `test-match` version 1 배포가 성공했고 `verify_jwt=false`, `status=ACTIVE`로 확인했다.
+- 프로젝트 URL은 `https://rslfcjydihvginylmhrv.supabase.co`로 확인했다.
+- 함수 URL은 `https://rslfcjydihvginylmhrv.supabase.co/functions/v1/instagram-webhook`, `https://rslfcjydihvginylmhrv.supabase.co/functions/v1/test-match`이다.
+- 스모크 테스트에서 `test-match`는 `가격이 얼마인가요?` 입력에 대해 `matched=true`를 반환했다.
+- 스모크 테스트에서 `instagram-webhook`은 검증 토큰 없는 GET 요청에 `403 Forbidden`으로 응답했다.

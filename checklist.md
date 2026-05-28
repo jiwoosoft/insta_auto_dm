@@ -47,3 +47,11 @@
 - [x] `seed_data.sql`을 Supabase에 적용.
 - [x] 규칙, 수신 로그, 발송 로그, 설정 데이터 건수 검증.
 - [x] 작업 기록 커밋.
+
+## 추가 체크리스트. Supabase Edge Function 배포
+
+- [x] `edge-function-guide-v3.md` 섹션 6-A, 6-B 코드 확인.
+- [x] `instagram-webhook`을 `verify_jwt=false`로 배포.
+- [x] `test-match`를 `verify_jwt=false`로 배포.
+- [x] 배포된 Edge Function 목록과 URL 확인.
+- [x] 작업 기록 커밋.
