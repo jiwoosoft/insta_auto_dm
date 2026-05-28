@@ -72,3 +72,12 @@
 - 이미지 첨부만 있었던 메시지는 원본 이미지 파일 경로가 없어 텍스트 프롬프트와 동일한 방식으로 완전 재현할 수 없다. 보관 문서에는 첨부 사실과 확인 가능한 오류 맥락을 기록한다.
 - 민감정보 패턴 검색 결과 실제 토큰 값은 발견되지 않았고 `META_VERIFY_TOKEN`, `INSTAGRAM_ACCESS_TOKEN` 같은 환경변수명만 확인됐다.
 - 기본 `npm`과 `node`는 Windows 권한 문제로 실패했으나 Codex 번들 Node로 `tsc -b`와 `vite build`를 직접 실행해 빌드가 통과했다.
+
+## 2026-05-29 README 작성
+
+- 목표는 현재 저장소만 보고도 서비스 목적, 실행 방법, 구현 범위, Supabase 연결 상태를 이해할 수 있게 README를 정리하는 것이다.
+- README에는 실제 비밀값을 넣지 않고 `META_VERIFY_TOKEN`, `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_ACCOUNT_ID` 같은 Secret 이름만 기록한다.
+- Supabase 프로젝트 URL과 Edge Function URL은 이미 사용자에게 전달된 공개 엔드포인트라 README에 포함한다.
+- 현재 프론트엔드는 로컬 JSON 기반 목업이고, DB와 Edge Function은 Supabase에 구축 및 배포된 상태다.
+- README 작성 후 민감정보 패턴 검색, 한국어 문장 끝 콜론 검색, `git diff --check`를 통과했다.
+- 이번 변경은 문서만 수정했으므로 프론트엔드 빌드는 새로 실행하지 않았다.
