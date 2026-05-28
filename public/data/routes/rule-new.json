@@ -1,0 +1,26 @@
+{
+  "__mock": {
+    "mode": "success"
+  },
+  "page": {
+    "title": "새 규칙 생성",
+    "subtitle": "반복 문의에 즉시 응답할 키워드와 자동 발송 문구를 등록합니다."
+  },
+  "view": {
+    "form": {
+      "defaultName": "가격 문의 응답",
+      "defaultDescription": "가격을 묻는 DM에 가격표 링크를 자동 안내합니다.",
+      "defaultMatchType": "contains",
+      "defaultKeywords": ["가격", "비용", "얼마"],
+      "defaultReplyText": "문의 감사합니다. 최신 가격표와 예약 안내 링크를 보내드립니다.",
+      "defaultReplyLink": "https://example.com/price",
+      "defaultPriority": 100,
+      "defaultActive": true
+    }
+  },
+  "actions": {
+    "submitLabel": "저장",
+    "submitAndListLabel": "저장 후 목록으로",
+    "cancelLabel": "취소"
+  }
+}

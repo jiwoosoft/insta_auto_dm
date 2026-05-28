@@ -1,0 +1,50 @@
+{
+  "__mock": {
+    "mode": "success"
+  },
+  "page": {
+    "title": "규칙 상세 / 수정",
+    "subtitle": "기존 규칙의 키워드, 응답 문구, 운영 상태를 수정합니다."
+  },
+  "view": {
+    "rule": {
+      "id": "price",
+      "name": "가격 문의 응답",
+      "description": "가격, 비용, 얼마 문구에 가격표 링크를 안내합니다.",
+      "matchType": "contains",
+      "triggerKeywords": ["가격", "비용", "얼마"],
+      "replyText": "문의 감사합니다. 최신 가격표와 예약 안내 링크를 보내드립니다.",
+      "replyLink": "https://example.com/price",
+      "isActive": true,
+      "priority": 100,
+      "updatedAt": "2026-05-28 10:10"
+    },
+    "recentMatches": [
+      {
+        "id": "match-01",
+        "sender": "soyeon_shop",
+        "message": "가격이 어떻게 되나요?",
+        "matchedKeyword": "가격",
+        "receivedAt": "오늘 10:42"
+      },
+      {
+        "id": "match-02",
+        "sender": "moon_j",
+        "message": "비용 안내 부탁드려요.",
+        "matchedKeyword": "비용",
+        "receivedAt": "오늘 09:24"
+      },
+      {
+        "id": "match-03",
+        "sender": "nara.daily",
+        "message": "얼마부터 시작하나요?",
+        "matchedKeyword": "얼마",
+        "receivedAt": "어제 17:12"
+      }
+    ]
+  },
+  "actions": {
+    "saveLabel": "저장",
+    "archiveLabel": "삭제"
+  }
+}
