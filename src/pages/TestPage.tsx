@@ -212,12 +212,12 @@ function ResultCard({
 
   if (state === "error") {
     return (
-      <Card className="border-red-200 bg-red-50">
+      <Card className="border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10">
         <CardHeader>
-          <CardTitle className="text-red-700">
+          <CardTitle className="text-red-700 dark:text-red-200">
             {testData.view.resultPreview.error.title}
           </CardTitle>
-          <CardDescription className="text-red-700/80">
+          <CardDescription className="text-red-700/80 dark:text-red-200/80">
             {testData.view.resultPreview.error.description}
           </CardDescription>
         </CardHeader>

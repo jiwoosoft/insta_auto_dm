@@ -4,10 +4,14 @@ import {
   Inbox,
   LayoutDashboard,
   ListChecks,
+  Moon,
   Send,
+  Sun,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 
 const navItems = [
   { label: "대시보드", to: "/", icon: LayoutDashboard },
@@ -17,7 +21,28 @@ const navItems = [
   { label: "테스트", to: "/test", icon: FlaskConical },
 ];
 
+type ThemeMode = "light" | "dark";
+
+function getInitialTheme(): ThemeMode {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  return window.localStorage.getItem("theme-mode") === "dark"
+    ? "dark"
+    : "light";
+}
+
 export function AppShell() {
+  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+  const isDark = theme === "dark";
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem("theme-mode", theme);
+  }, [isDark, theme]);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-30 border-b bg-card/95 backdrop-blur">
@@ -35,7 +60,22 @@ export function AppShell() {
               </p>
             </div>
           </div>
-          <Badge variant="success">Local Mock Run</Badge>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setTheme(isDark ? "light" : "dark")}
+              title={isDark ? "라이트모드로 전환" : "다크모드로 전환"}
+            >
+              {isDark ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+              {isDark ? "라이트" : "다크"}
+            </Button>
+            <Badge variant="success">Local Mock Run</Badge>
+          </div>
         </div>
       </header>
 

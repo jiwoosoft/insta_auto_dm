@@ -166,7 +166,7 @@ export default function DashboardPage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <TriangleAlert className="h-4 w-4 text-amber-600" />
+                  <TriangleAlert className="h-4 w-4 text-amber-600 dark:text-amber-300" />
                   <CardTitle>최근 발송 실패</CardTitle>
                 </div>
                 <CardDescription>

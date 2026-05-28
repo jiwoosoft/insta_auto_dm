@@ -152,14 +152,16 @@ export function ErrorState({
   onRetry: () => void;
 }) {
   return (
-    <Card className="border-red-200 bg-red-50">
+    <Card className="border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10">
       <CardContent className="flex min-h-48 flex-col items-start justify-center gap-3">
-        <div className="flex items-center gap-2 text-red-700">
+        <div className="flex items-center gap-2 text-red-700 dark:text-red-200">
           <AlertTriangle className="h-5 w-5" />
           <p className="font-semibold">{title}</p>
         </div>
         {description ? (
-          <p className="text-sm text-red-700/80">{description}</p>
+          <p className="text-sm text-red-700/80 dark:text-red-200/80">
+            {description}
+          </p>
         ) : null}
         <Button variant="destructive" onClick={onRetry}>
           <RotateCw className="h-4 w-4" />
