@@ -30,3 +30,22 @@
 - 현재 프로젝트 문서에는 실제 project ref가 없어서 전체 계정 범위가 될 수 있는 project-scoped 연결은 하지 않았다.
 - Codex 전역 설정에 `https://mcp.supabase.com/mcp?read_only=true`를 등록했다.
 - Codex CLI OAuth 로그인은 제한 시간 안에 완료되지 않았고, 안정적인 인증을 위해 `SUPABASE_ACCESS_TOKEN` bearer token 환경변수를 참조하도록 바꿨다.
+
+## 2026-05-28 Supabase DB 초기 구축
+
+- 목표는 PRD의 Instagram DM 자동응답 관리자 서비스를 위한 DB를 먼저 구축하는 것이다.
+- `schema.sql`은 ERD와 IA의 핵심 4개 테이블인 `rules`, `incoming_messages`, `outgoing_messages`, `integration_settings`를 만든다.
+- `seed_data.sql`은 운영 편의를 위해 `sender_alias`, `recipient_alias` 컬럼을 추가하고 더미 규칙 10건, 수신 로그 30건, 발송 로그 22건을 삽입한다.
+- `schema.sql`은 `CREATE TABLE`에 `IF NOT EXISTS`가 없어 이미 동일 테이블이 있으면 실패한다. 적용 전 원격 DB 상태 확인이 필요하다.
+- Supabase MCP `list_tables` 결과 `public` 스키마는 비어 있었다.
+- `schema.sql` 적용 시도는 현재 로드된 MCP 세션이 read-only로 붙어 있어 `Cannot apply migration in read-only mode.`로 차단됐다.
+- `~/.codex/config.toml`의 Supabase MCP URL은 `read_only=true`를 제거한 write 가능 URL로 바꿨다. Codex 재시작 후 새 MCP 세션으로 이어가야 한다.
+- 새 세션에서 `initial_schema_from_schema_sql` 마이그레이션 적용이 성공했다.
+- 생성된 구조는 ERD/IA의 `rules`, `incoming_messages`, `outgoing_messages`, `integration_settings`와 일치했다. PK, FK, `ON DELETE SET NULL`, 유니크 제약, 주요 인덱스, `updated_at` 트리거까지 확인했다.
+- `seed_data_from_seed_data_sql` 마이그레이션 적용이 성공했다.
+- 검증 건수는 `rules=10`, `incoming_messages=30`, `outgoing_messages=22`, `integration_settings=1`이다.
+- 시드 상태는 활성 규칙 7건, 비활성 규칙 3건, 수신 matched 22건, unmatched 8건, 발송 success 19건, failed 3건이다.
+- FK 고아 레코드는 `incoming_matched_without_rule=0`, `outgoing_matched_without_rule=0`, `outgoing_without_incoming=0`으로 확인했다.
+- 작업 후 MCP 설정은 다시 `read_only=true`로 되돌렸다.
+- Supabase security advisor는 4개 public 테이블의 RLS 미설정과 `update_updated_at` 함수 search_path 미고정을 경고했다. 사용자 승인 없이 RLS는 적용하지 않았다.
+- 최종 읽기 검증은 실제 스키마 컬럼인 `match_status`, `send_status`, `incoming_log_id`, `matched_rule_id` 기준으로 통과했다.

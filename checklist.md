@@ -36,3 +36,14 @@
 - [x] `SUPABASE_ACCESS_TOKEN` bearer token 환경변수 연결.
 - [x] `codex mcp get supabase`로 등록 상태 확인.
 - [x] 논리 단위 커밋 생성.
+
+## 추가 체크리스트. Supabase DB 초기 구축
+
+- [x] `schema.sql`, `seed_data.sql`, `ERD.md`, `IA.md` 읽기.
+- [x] 원격 Supabase의 기존 테이블 상태 확인.
+- [x] MCP 쓰기 가능 설정 확인 또는 전환.
+- [x] `schema.sql`을 Supabase에 적용.
+- [x] 생성 테이블, 컬럼, FK, 인덱스를 ERD/IA와 교차검증.
+- [x] `seed_data.sql`을 Supabase에 적용.
+- [x] 규칙, 수신 로그, 발송 로그, 설정 데이터 건수 검증.
+- [x] 작업 기록 커밋.
