@@ -22,3 +22,11 @@
 - 테마 토글은 로그인이나 계정 개념 없이 로컬 목업 상태로만 동작해야 한다.
 - 헤더 우측에 라이트와 다크 전환 버튼을 추가했고 선택값은 `theme-mode` 키로 저장한다.
 - 브라우저에서 다크 전환, 새로고침 후 유지, 라이트 복귀, 콘솔 오류 없음까지 확인했다.
+
+## 2026-05-28 Supabase MCP 연결
+
+- 사용자의 “superbase mcp server” 요청은 Supabase MCP server 연결로 해석했다.
+- Supabase 공식 문서 기준 원격 MCP URL은 `https://mcp.supabase.com/mcp`다.
+- 현재 프로젝트 문서에는 실제 project ref가 없어서 전체 계정 범위가 될 수 있는 project-scoped 연결은 하지 않았다.
+- Codex 전역 설정에 `https://mcp.supabase.com/mcp?read_only=true`를 등록했다.
+- Codex CLI OAuth 로그인은 제한 시간 안에 완료되지 않았고, 안정적인 인증을 위해 `SUPABASE_ACCESS_TOKEN` bearer token 환경변수를 참조하도록 바꿨다.

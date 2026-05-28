@@ -24,3 +24,11 @@
 - 헤더 우측에 현재 테마를 바꾸는 토글 버튼을 추가한다.
 - 선택한 테마는 `localStorage`에 저장하고 다음 방문에도 유지한다.
 - 라이트와 다크 상태 모두 브라우저에서 확인한다.
+
+## 추가 작업. Supabase MCP 연결
+
+- 공식 Supabase MCP 문서를 기준으로 원격 MCP 서버 URL을 확인한다.
+- Codex 전역 MCP 설정에 Supabase 서버를 추가한다.
+- 실제 프로젝트 ref가 아직 없으므로 `read_only=true`로 먼저 연결한다.
+- PAT 기반 인증을 위해 `SUPABASE_ACCESS_TOKEN` 환경변수 참조를 설정한다.
+- `codex mcp get supabase`로 등록 상태를 확인한다.

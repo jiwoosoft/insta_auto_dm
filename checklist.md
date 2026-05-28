@@ -27,3 +27,12 @@
 - [x] 빌드 검증.
 - [x] 브라우저에서 라이트/다크 전환 확인.
 - [x] 논리 단위 커밋 생성.
+
+## 추가 체크리스트. Supabase MCP 연결
+
+- [x] 공식 Supabase MCP 설정 방식 확인.
+- [x] 기존 Codex MCP 설정 확인.
+- [x] Supabase MCP 서버를 read-only로 등록.
+- [x] `SUPABASE_ACCESS_TOKEN` bearer token 환경변수 연결.
+- [x] `codex mcp get supabase`로 등록 상태 확인.
+- [x] 논리 단위 커밋 생성.
