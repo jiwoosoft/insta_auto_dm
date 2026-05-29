@@ -127,3 +127,18 @@
 - 발송 로그 화면은 Supabase 환경변수가 있으면 `outgoing_messages`를 `sent_at desc` 순서로 표시한다.
 - 브라우저에서 `/logs/incoming` 화면에 최근 실제 메시지 `테스트 프로그램은 어디있나여?`가 표시되는 것을 확인했다.
 - 브라우저에서 `/logs/outgoing` 화면에 최근 실제 발송 로그와 `테스트` 규칙명이 표시되는 것을 확인했다.
+
+## 2026-05-30 대시보드 정보갱신 점검
+
+- 사용자는 웹 대시보드 메뉴에서 정보갱신이 안 되는 것 같다고 보고했다.
+- 실제 앱 루트는 `E:\Solusseum\Users\d2fre\OneDrive\문서\Insta_auto_dm\insta_auto_dm`로 확인했다.
+- 이번 성공 기준은 대시보드의 정보갱신 동작이 실제 Supabase 데이터 기준으로 다시 조회되거나, 미연결 상태라면 사용자가 오해하지 않도록 명확히 표시되는 것이다.
+- 우선 `DashboardPage`와 `supabase-rest` 코드를 확인해 목업 데이터 고정, 클릭 핸들러 누락, 데이터 조회 함수 부재를 분리한다.
+- 원인은 `DashboardPage`가 `public/data/routes/dashboard.json` 목업만 표시하고 `mock.reload`만 호출해서 실제 Supabase 데이터를 다시 조회하지 않는 구조였기 때문이다.
+- `IncomingLogView`와 `OutgoingLogView`에 원본 시각 필드를 보존해 대시보드에서 오늘 수신, 오늘 발송 성공을 계산할 수 있게 했다.
+- 대시보드는 Supabase가 설정되어 있으면 `listRules`, `listIncomingLogs`, `listOutgoingLogs`를 병렬 호출해 KPI, 최근 수신 메시지, 최근 발송 실패 목록을 다시 계산한다.
+- 정보갱신 버튼을 누르면 `loadDashboard(true)`가 실행되고 성공 시 `대시보드 정보를 갱신했습니다.` 토스트를 표시한다.
+- `npm run build`를 실행했고 TypeScript 빌드와 Vite 번들이 통과했다.
+- 브라우저에서 `http://127.0.0.1:5173/`를 열어 `Supabase 실데이터 연결됨` 문구, KPI, 최근 수신 메시지를 확인했다.
+- 브라우저에서 갱신 버튼을 클릭해 `success` 상태와 `대시보드 정보를 갱신했습니다.` 토스트를 확인했다.
+- 브라우저 콘솔 오류는 없었다.

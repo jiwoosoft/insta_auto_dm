@@ -7,7 +7,9 @@ import {
   MessageSquarePlus,
   TriangleAlert,
 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import dashboardData from "../../public/data/routes/dashboard.json";
 import {
   EmptyState,
@@ -24,35 +26,211 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
-import { normalizeMockMode, useMockPageState } from "../lib/mock-state";
+import {
+  normalizeMockMode,
+  PageState,
+  useMockPageState,
+} from "../lib/mock-state";
+import {
+  getSupabaseStatusLabel,
+  IncomingLogView,
+  isSupabaseConfigured,
+  listIncomingLogs,
+  listOutgoingLogs,
+  listRules,
+  OutgoingLogView,
+  RuleView,
+} from "../lib/supabase-rest";
 
 const quickLinkIcons = [MessageSquarePlus, ListChecks, Inbox, FlaskConical];
+const usesSupabase = isSupabaseConfigured();
+
+type DashboardKpi = (typeof dashboardData.view.kpis)[number];
+type DashboardIncoming = (typeof dashboardData.view.recentIncoming)[number];
+type DashboardFailure = (typeof dashboardData.view.recentOutgoingFailures)[number];
+type DashboardView = {
+  kpis: DashboardKpi[];
+  recentIncoming: DashboardIncoming[];
+  recentOutgoingFailures: DashboardFailure[];
+};
+
+function isSameLocalDate(value?: string) {
+  if (!value) {
+    return false;
+  }
+
+  const current = new Date();
+  const target = new Date(value);
+
+  return (
+    current.getFullYear() === target.getFullYear() &&
+    current.getMonth() === target.getMonth() &&
+    current.getDate() === target.getDate()
+  );
+}
+
+function toPercent(value: number, total: number) {
+  if (total === 0) {
+    return "0%";
+  }
+
+  return `${Math.round((value / total) * 100)}%`;
+}
+
+function buildDashboardView(
+  rules: RuleView[],
+  incomingLogs: IncomingLogView[],
+  outgoingLogs: OutgoingLogView[],
+): DashboardView {
+  const activeRules = rules.filter((rule) => rule.isActive).length;
+  const todayIncoming = incomingLogs.filter((log) =>
+    isSameLocalDate(log.receivedAtRaw),
+  );
+  const todayOutgoing = outgoingLogs.filter((log) =>
+    isSameLocalDate(log.sentAtRaw),
+  );
+  const todaySuccess = todayOutgoing.filter(
+    (log) => log.status === "success",
+  ).length;
+  const successRate =
+    todayOutgoing.length > 0
+      ? `${toPercent(todaySuccess, todayOutgoing.length)} 성공률`
+      : "오늘 발송 없음";
+
+  return {
+    kpis: [
+      {
+        label: "총 규칙 수",
+        value: String(rules.length),
+        delta: "Supabase 실시간",
+        tone: "neutral",
+      },
+      {
+        label: "활성 규칙 수",
+        value: String(activeRules),
+        delta: `${toPercent(activeRules, rules.length)} 활성`,
+        tone: "success",
+      },
+      {
+        label: "오늘 수신 메시지",
+        value: String(todayIncoming.length),
+        delta: "오늘 기준",
+        tone: "info",
+      },
+      {
+        label: "오늘 발송 성공",
+        value: String(todaySuccess),
+        delta: successRate,
+        tone: todaySuccess > 0 ? "success" : "neutral",
+      },
+    ],
+    recentIncoming: incomingLogs.slice(0, 4).map((log) => ({
+      id: log.id,
+      sender: log.sender,
+      message: log.message,
+      receivedAt: log.receivedAt,
+      matched: log.matched,
+      ruleName: log.ruleName,
+    })),
+    recentOutgoingFailures: outgoingLogs
+      .filter((log) => log.status === "failed")
+      .slice(0, 3)
+      .map((log) => ({
+        id: log.id,
+        recipient: log.recipient,
+        ruleName: log.ruleName,
+        reason: log.failureReason || "오류 사유 없음",
+        sentAt: log.sentAt,
+      })),
+  };
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const mock = useMockPageState(normalizeMockMode(dashboardData.__mock.mode));
+  const [pageState, setPageState] = useState<PageState>(
+    usesSupabase ? "loading" : "initial",
+  );
+  const [view, setView] = useState<DashboardView>(dashboardData.view);
+  const state = usesSupabase ? pageState : mock.state;
   const hasRecentData =
-    dashboardData.view.recentIncoming.length > 0 ||
-    dashboardData.view.recentOutgoingFailures.length > 0;
+    view.recentIncoming.length > 0 || view.recentOutgoingFailures.length > 0;
+
+  const loadDashboard = useCallback(async (notify = false) => {
+    if (!usesSupabase) {
+      return;
+    }
+
+    setPageState("loading");
+    try {
+      const [rules, incomingLogs, outgoingLogs] = await Promise.all([
+        listRules(),
+        listIncomingLogs(),
+        listOutgoingLogs(),
+      ]);
+      const nextView = buildDashboardView(rules, incomingLogs, outgoingLogs);
+
+      setView(nextView);
+      setPageState(hasDashboardRows(nextView) ? "success" : "empty");
+      if (notify) {
+        toast.success("대시보드 정보를 갱신했습니다.");
+      }
+    } catch (error) {
+      setPageState("error");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "대시보드 정보 조회에 실패했습니다.",
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
 
   return (
     <PageFrame
       title={dashboardData.page.title}
       subtitle={dashboardData.page.subtitle}
-      state={mock.state}
-      onReload={mock.reload}
-      onShowSuccess={mock.showSuccess}
-      onShowEmpty={mock.showEmpty}
-      onShowError={mock.showError}
+      state={state}
+      onReload={() => {
+        if (usesSupabase) {
+          void loadDashboard(true);
+          return;
+        }
+
+        mock.reload();
+      }}
+      onShowSuccess={() =>
+        usesSupabase ? setPageState("success") : mock.showSuccess()
+      }
+      onShowEmpty={() =>
+        usesSupabase ? setPageState("empty") : mock.showEmpty()
+      }
+      onShowError={() =>
+        usesSupabase ? setPageState("error") : mock.showError()
+      }
     >
-      {mock.state === "initial" || mock.state === "loading" ? (
+      {state === "initial" || state === "loading" ? (
         <LoadingBlock rows={4} />
-      ) : mock.state === "error" ? (
+      ) : state === "error" ? (
         <ErrorState
-          description="대시보드 더미 데이터를 표시하지 못한 상태입니다."
-          onRetry={mock.reload}
+          description={
+            usesSupabase
+              ? "Supabase 대시보드 정보를 불러오지 못했습니다. 환경변수와 테이블 권한을 확인하세요."
+              : "대시보드 더미 데이터를 표시하지 못한 상태입니다."
+          }
+          onRetry={() => {
+            if (usesSupabase) {
+              void loadDashboard(true);
+              return;
+            }
+
+            mock.reload();
+          }}
         />
-      ) : mock.state === "empty" || !hasRecentData ? (
+      ) : state === "empty" || !hasRecentData ? (
         <EmptyState
           title="표시할 최근 로그가 없습니다."
           description="새 규칙을 만든 뒤 테스트 화면에서 운영 흐름을 확인하세요."
@@ -65,7 +243,7 @@ export default function DashboardPage() {
       ) : (
         <div className="space-y-5">
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {dashboardData.view.kpis.map((kpi) => (
+            {view.kpis.map((kpi) => (
               <Card
                 key={kpi.label}
                 className="transition-transform hover:-translate-y-0.5"
@@ -89,7 +267,8 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle>빠른 실행</CardTitle>
               <CardDescription>
-                운영자가 가장 자주 쓰는 화면으로 바로 이동합니다.
+                {getSupabaseStatusLabel()} · 운영자가 가장 자주 쓰는 화면으로 바로
+                이동합니다.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -135,7 +314,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {dashboardData.view.recentIncoming.map((log) => (
+                    {view.recentIncoming.map((log) => (
                       <tr key={log.id} className="border-b last:border-0">
                         <td className="py-3 font-medium">{log.sender}</td>
                         <td className="py-3 text-muted-foreground">
@@ -174,7 +353,7 @@ export default function DashboardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {dashboardData.view.recentOutgoingFailures.map((failure) => (
+                {view.recentOutgoingFailures.map((failure) => (
                   <button
                     key={failure.id}
                     onClick={() => navigate("/logs/outgoing")}
@@ -199,5 +378,11 @@ export default function DashboardPage() {
         </div>
       )}
     </PageFrame>
+  );
+}
+
+function hasDashboardRows(view: DashboardView) {
+  return (
+    view.recentIncoming.length > 0 || view.recentOutgoingFailures.length > 0
   );
 }

@@ -23,6 +23,7 @@ export type IncomingLogView = {
   sender: string;
   message: string;
   receivedAt: string;
+  receivedAtRaw?: string;
   matched: boolean;
   ruleName: string;
   platformMessageId: string;
@@ -35,6 +36,7 @@ export type OutgoingLogView = {
   ruleName: string;
   status: "success" | "failed";
   sentAt: string;
+  sentAtRaw?: string;
   replyText: string;
   replyLink: string;
   failureReason: string;
@@ -229,6 +231,7 @@ function toIncomingLogView(row: IncomingLogRow): IncomingLogView {
     sender: formatActor(row.sender_alias, row.sender_id),
     message: row.message_text,
     receivedAt: formatDateTime(row.received_at),
+    receivedAtRaw: row.received_at,
     matched: row.match_status === "matched",
     ruleName: formatRuleName(row.matched_rule_id, row.rules),
     platformMessageId: row.platform_message_id ?? "-",
@@ -243,6 +246,7 @@ function toOutgoingLogView(row: OutgoingLogRow): OutgoingLogView {
     ruleName: formatRuleName(row.matched_rule_id, row.rules),
     status: row.send_status === "success" ? "success" : "failed",
     sentAt: formatDateTime(row.sent_at),
+    sentAtRaw: row.sent_at,
     replyText: row.sent_text,
     replyLink: row.sent_link ?? "",
     failureReason: row.error_message ?? "",
