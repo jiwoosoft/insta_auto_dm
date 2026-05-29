@@ -1,6 +1,6 @@
 // Instagram DM 수신 로그 목록과 상세 패널을 렌더링합니다.
 import { ExternalLink, Search } from "lucide-react";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import incomingData from "../../public/data/routes/logs-incoming.json";
@@ -21,22 +21,73 @@ import {
 } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
-import { normalizeMockMode, useMockPageState } from "../lib/mock-state";
+import {
+  normalizeMockMode,
+  PageState,
+  useMockPageState,
+} from "../lib/mock-state";
+import {
+  getSupabaseStatusLabel,
+  IncomingLogView,
+  isSupabaseConfigured,
+  listIncomingLogs,
+} from "../lib/supabase-rest";
 
-type IncomingLog = (typeof incomingData.view.logs)[number];
+type MockIncomingLog = (typeof incomingData.view.logs)[number];
 type MatchFilter = "all" | "matched" | "unmatched";
+
+const usesSupabase = isSupabaseConfigured();
+
+function toFallbackIncomingLog(log: MockIncomingLog): IncomingLogView {
+  return {
+    id: log.id,
+    sender: log.sender,
+    message: log.message,
+    receivedAt: log.receivedAt,
+    matched: log.matched,
+    ruleName: log.ruleName,
+    platformMessageId: log.platformMessageId,
+  };
+}
 
 export default function IncomingLogsPage() {
   const navigate = useNavigate();
   const mock = useMockPageState(normalizeMockMode(incomingData.__mock.mode));
+  const [pageState, setPageState] = useState<PageState>(
+    usesSupabase ? "loading" : "initial",
+  );
+  const [logs, setLogs] = useState<IncomingLogView[]>(
+    incomingData.view.logs.map(toFallbackIncomingLog),
+  );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<MatchFilter>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const state = usesSupabase ? pageState : mock.state;
+
+  const loadLogs = useCallback(async () => {
+    if (!usesSupabase) {
+      return;
+    }
+
+    setPageState("loading");
+    try {
+      const remoteLogs = await listIncomingLogs();
+      setLogs(remoteLogs);
+      setPageState(remoteLogs.length > 0 ? "success" : "empty");
+    } catch (error) {
+      setPageState("error");
+      toast.error(error instanceof Error ? error.message : "수신 로그 조회에 실패했습니다.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLogs();
+  }, [loadLogs]);
 
   const filteredLogs = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
-    return incomingData.view.logs.filter((log) => {
+    return logs.filter((log) => {
       const matchesKeyword =
         keyword.length === 0 ||
         log.sender.toLowerCase().includes(keyword) ||
@@ -48,9 +99,9 @@ export default function IncomingLogsPage() {
 
       return matchesKeyword && matchesFilter;
     });
-  }, [filter, search]);
+  }, [filter, logs, search]);
 
-  function toggleExpanded(log: IncomingLog) {
+  function toggleExpanded(log: IncomingLogView) {
     setExpandedId((current) => (current === log.id ? null : log.id));
   }
 
@@ -58,11 +109,11 @@ export default function IncomingLogsPage() {
     <PageFrame
       title={incomingData.page.title}
       subtitle={incomingData.page.subtitle}
-      state={mock.state}
-      onReload={mock.reload}
-      onShowSuccess={mock.showSuccess}
-      onShowEmpty={mock.showEmpty}
-      onShowError={mock.showError}
+      state={state}
+      onReload={usesSupabase ? loadLogs : mock.reload}
+      onShowSuccess={() => (usesSupabase ? setPageState("success") : mock.showSuccess())}
+      onShowEmpty={() => (usesSupabase ? setPageState("empty") : mock.showEmpty())}
+      onShowError={() => (usesSupabase ? setPageState("error") : mock.showError())}
       actions={
         <Button
           variant="secondary"
@@ -72,19 +123,23 @@ export default function IncomingLogsPage() {
         </Button>
       }
     >
-      {mock.state === "initial" || mock.state === "loading" ? (
+      {state === "initial" || state === "loading" ? (
         <LoadingBlock rows={5} />
-      ) : mock.state === "error" ? (
+      ) : state === "error" ? (
         <ErrorState
-          description="수신 로그 더미 데이터를 표시하지 못한 상태입니다."
-          onRetry={mock.reload}
+          description={
+            usesSupabase
+              ? "Supabase 수신 로그를 불러오지 못했습니다. 환경변수와 테이블 권한을 확인하세요."
+              : "수신 로그 더미 데이터를 표시하지 못한 상태입니다."
+          }
+          onRetry={usesSupabase ? loadLogs : mock.reload}
         />
       ) : (
         <Card>
           <CardHeader>
             <CardTitle>전체 수신 이력</CardTitle>
             <CardDescription>
-              행을 클릭하면 플랫폼 메시지 ID와 원문 상세를 확인할 수 있습니다.
+              {getSupabaseStatusLabel()} · 행을 클릭하면 플랫폼 메시지 ID와 원문 상세를 확인할 수 있습니다.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -112,7 +167,7 @@ export default function IncomingLogsPage() {
               </Select>
             </div>
 
-            {mock.state === "empty" || filteredLogs.length === 0 ? (
+            {state === "empty" || filteredLogs.length === 0 ? (
               <EmptyState
                 title="조건에 맞는 수신 로그가 없습니다."
                 description="테스트 페이지에서 문장을 넣어 매칭 흐름을 확인하세요."

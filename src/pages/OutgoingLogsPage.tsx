@@ -1,6 +1,6 @@
 // 자동응답 발송 로그 목록과 실패 상세를 렌더링합니다.
 import { ExternalLink, Search } from "lucide-react";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import outgoingData from "../../public/data/routes/logs-outgoing.json";
@@ -21,33 +21,88 @@ import {
 } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
-import { normalizeMockMode, useMockPageState } from "../lib/mock-state";
+import {
+  normalizeMockMode,
+  PageState,
+  useMockPageState,
+} from "../lib/mock-state";
+import {
+  getSupabaseStatusLabel,
+  isSupabaseConfigured,
+  listOutgoingLogs,
+  OutgoingLogView,
+} from "../lib/supabase-rest";
 
-type OutgoingLog = (typeof outgoingData.view.logs)[number];
+type MockOutgoingLog = (typeof outgoingData.view.logs)[number];
 type StatusFilter = "all" | "success" | "failed";
+
+const usesSupabase = isSupabaseConfigured();
+
+function toFallbackOutgoingLog(log: MockOutgoingLog): OutgoingLogView {
+  return {
+    id: log.id,
+    recipient: log.recipient,
+    ruleId: log.ruleId,
+    ruleName: log.ruleName,
+    status: log.status as "success" | "failed",
+    sentAt: log.sentAt,
+    replyText: log.replyText,
+    replyLink: log.replyLink,
+    failureReason: log.failureReason,
+    metaResponse: log.metaResponse,
+  };
+}
 
 export default function OutgoingLogsPage() {
   const navigate = useNavigate();
   const mock = useMockPageState(normalizeMockMode(outgoingData.__mock.mode));
+  const [pageState, setPageState] = useState<PageState>(
+    usesSupabase ? "loading" : "initial",
+  );
+  const [logs, setLogs] = useState<OutgoingLogView[]>(
+    outgoingData.view.logs.map(toFallbackOutgoingLog),
+  );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const state = usesSupabase ? pageState : mock.state;
+
+  const loadLogs = useCallback(async () => {
+    if (!usesSupabase) {
+      return;
+    }
+
+    setPageState("loading");
+    try {
+      const remoteLogs = await listOutgoingLogs();
+      setLogs(remoteLogs);
+      setPageState(remoteLogs.length > 0 ? "success" : "empty");
+    } catch (error) {
+      setPageState("error");
+      toast.error(error instanceof Error ? error.message : "발송 로그 조회에 실패했습니다.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLogs();
+  }, [loadLogs]);
 
   const filteredLogs = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
-    return outgoingData.view.logs.filter((log) => {
+    return logs.filter((log) => {
       const matchesKeyword =
         keyword.length === 0 ||
         log.recipient.toLowerCase().includes(keyword) ||
-        log.ruleName.toLowerCase().includes(keyword);
+        log.ruleName.toLowerCase().includes(keyword) ||
+        log.replyText.toLowerCase().includes(keyword);
       const matchesFilter = filter === "all" || log.status === filter;
 
       return matchesKeyword && matchesFilter;
     });
-  }, [filter, search]);
+  }, [filter, logs, search]);
 
-  function toggleExpanded(log: OutgoingLog) {
+  function toggleExpanded(log: OutgoingLogView) {
     setExpandedId((current) => (current === log.id ? null : log.id));
   }
 
@@ -55,11 +110,11 @@ export default function OutgoingLogsPage() {
     <PageFrame
       title={outgoingData.page.title}
       subtitle={outgoingData.page.subtitle}
-      state={mock.state}
-      onReload={mock.reload}
-      onShowSuccess={mock.showSuccess}
-      onShowEmpty={mock.showEmpty}
-      onShowError={mock.showError}
+      state={state}
+      onReload={usesSupabase ? loadLogs : mock.reload}
+      onShowSuccess={() => (usesSupabase ? setPageState("success") : mock.showSuccess())}
+      onShowEmpty={() => (usesSupabase ? setPageState("empty") : mock.showEmpty())}
+      onShowError={() => (usesSupabase ? setPageState("error") : mock.showError())}
       actions={
         <Button
           variant="secondary"
@@ -69,19 +124,23 @@ export default function OutgoingLogsPage() {
         </Button>
       }
     >
-      {mock.state === "initial" || mock.state === "loading" ? (
+      {state === "initial" || state === "loading" ? (
         <LoadingBlock rows={5} />
-      ) : mock.state === "error" ? (
+      ) : state === "error" ? (
         <ErrorState
-          description="발송 로그 더미 데이터를 표시하지 못한 상태입니다."
-          onRetry={mock.reload}
+          description={
+            usesSupabase
+              ? "Supabase 발송 로그를 불러오지 못했습니다. 환경변수와 테이블 권한을 확인하세요."
+              : "발송 로그 더미 데이터를 표시하지 못한 상태입니다."
+          }
+          onRetry={usesSupabase ? loadLogs : mock.reload}
         />
       ) : (
         <Card>
           <CardHeader>
             <CardTitle>자동응답 발송 이력</CardTitle>
             <CardDescription>
-              실패 행을 펼치면 실패 사유와 Meta 응답을 확인할 수 있습니다.
+              {getSupabaseStatusLabel()} · 실패 행을 펼치면 실패 사유와 Meta 응답을 확인할 수 있습니다.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -109,7 +168,7 @@ export default function OutgoingLogsPage() {
               </Select>
             </div>
 
-            {mock.state === "empty" || filteredLogs.length === 0 ? (
+            {state === "empty" || filteredLogs.length === 0 ? (
               <EmptyState
                 title="조건에 맞는 발송 로그가 없습니다."
                 description="수신 로그에서 매칭 여부를 먼저 확인하세요."
@@ -158,9 +217,12 @@ export default function OutgoingLogsPage() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              disabled={!log.ruleId}
                               onClick={(event) => {
                                 event.stopPropagation();
-                                navigate(`/rules/${log.ruleId}`);
+                                if (log.ruleId) {
+                                  navigate(`/rules/${log.ruleId}`);
+                                }
                               }}
                             >
                               규칙 보기
@@ -192,9 +254,12 @@ export default function OutgoingLogsPage() {
                                 <div className="flex flex-wrap items-start gap-2">
                                   <Button
                                     variant="secondary"
+                                    disabled={!log.ruleId}
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      navigate(`/rules/${log.ruleId}`);
+                                      if (log.ruleId) {
+                                        navigate(`/rules/${log.ruleId}`);
+                                      }
                                     }}
                                   >
                                     <ExternalLink className="h-4 w-4" />

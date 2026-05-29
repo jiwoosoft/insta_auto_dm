@@ -114,3 +114,16 @@
 - 사용자가 체감한 미동작은 Supabase 환경변수가 없는 웹에서 로컬 목업 저장처럼 보이는 UX와 구분이 어려웠을 가능성이 높다.
 - 헤더 배지를 `Local Mock Run`에서 실제 연결 상태 기반 `Supabase 연결` 또는 `목업 모드`로 바꿨다.
 - Supabase 미연결 상태에서는 신규 저장, 수정, 활성 토글, 삭제가 로컬에서 성공한 것처럼 보이지 않도록 오류 토스트로 차단했다.
+
+## 2026-05-30 수신/발송 로그 실데이터 연결
+
+- 사용자는 자동응답과 규칙 CRUD는 정상화됐지만, 웹의 수신 로그와 발송 로그 메뉴가 실제 로그를 표시하지 않는다고 보고했다.
+- 이번 성공 기준은 관리자 웹의 수신 로그와 발송 로그 화면이 Supabase `incoming_messages`, `outgoing_messages` 데이터를 표시하는 것이다.
+- 먼저 현재 페이지가 목업 JSON만 사용하는지 확인하고, DB에는 실제 로그가 쌓이는지 확인한다.
+- 원격 DB에는 `incoming_messages=53`, `outgoing_messages=37`이 있으며 최신 로그도 존재한다.
+- 기존 `IncomingLogsPage`, `OutgoingLogsPage`는 `public/data/routes/logs-*.json`만 사용해 실제 DB 로그를 조회하지 않았다.
+- `src/lib/supabase-rest.ts`에 `listIncomingLogs`, `listOutgoingLogs`를 추가하고 `rules(name)` 조인으로 적용 규칙명을 함께 가져오도록 했다.
+- 수신 로그 화면은 Supabase 환경변수가 있으면 `incoming_messages`를 `received_at desc` 순서로 표시한다.
+- 발송 로그 화면은 Supabase 환경변수가 있으면 `outgoing_messages`를 `sent_at desc` 순서로 표시한다.
+- 브라우저에서 `/logs/incoming` 화면에 최근 실제 메시지 `테스트 프로그램은 어디있나여?`가 표시되는 것을 확인했다.
+- 브라우저에서 `/logs/outgoing` 화면에 최근 실제 발송 로그와 `테스트` 규칙명이 표시되는 것을 확인했다.

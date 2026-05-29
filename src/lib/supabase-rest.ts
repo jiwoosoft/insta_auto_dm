@@ -18,6 +18,29 @@ export type RuleView = RuleFormInput & {
   triggerKeywords: string[];
 };
 
+export type IncomingLogView = {
+  id: string;
+  sender: string;
+  message: string;
+  receivedAt: string;
+  matched: boolean;
+  ruleName: string;
+  platformMessageId: string;
+};
+
+export type OutgoingLogView = {
+  id: string;
+  recipient: string;
+  ruleId: string | null;
+  ruleName: string;
+  status: "success" | "failed";
+  sentAt: string;
+  replyText: string;
+  replyLink: string;
+  failureReason: string;
+  metaResponse: string;
+};
+
 type RuleRow = {
   id: string;
   name: string;
@@ -30,6 +53,32 @@ type RuleRow = {
   priority: number;
   created_at: string;
   updated_at: string;
+};
+
+type IncomingLogRow = {
+  id: string;
+  sender_id: string;
+  sender_alias: string | null;
+  message_text: string;
+  platform_message_id: string | null;
+  matched_rule_id: string | null;
+  match_status: "matched" | "unmatched" | string;
+  received_at: string;
+  rules: { name: string } | null;
+};
+
+type OutgoingLogRow = {
+  id: string;
+  recipient_id: string;
+  recipient_alias: string | null;
+  matched_rule_id: string | null;
+  sent_text: string;
+  sent_link: string | null;
+  send_status: "success" | "failed" | string;
+  error_message: string | null;
+  meta_response_payload: unknown;
+  sent_at: string;
+  rules: { name: string } | null;
 };
 
 export type RemoteMatchResult =
@@ -150,6 +199,57 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+function formatActor(alias: string | null, id: string) {
+  return alias?.trim() || id;
+}
+
+function formatRuleName(ruleId: string | null, rule?: { name: string } | null) {
+  if (rule?.name) {
+    return rule.name;
+  }
+
+  return ruleId ? "삭제된 규칙" : "-";
+}
+
+function formatMetaResponse(value: unknown) {
+  if (!value) {
+    return "-";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return JSON.stringify(value);
+}
+
+function toIncomingLogView(row: IncomingLogRow): IncomingLogView {
+  return {
+    id: row.id,
+    sender: formatActor(row.sender_alias, row.sender_id),
+    message: row.message_text,
+    receivedAt: formatDateTime(row.received_at),
+    matched: row.match_status === "matched",
+    ruleName: formatRuleName(row.matched_rule_id, row.rules),
+    platformMessageId: row.platform_message_id ?? "-",
+  };
+}
+
+function toOutgoingLogView(row: OutgoingLogRow): OutgoingLogView {
+  return {
+    id: row.id,
+    recipient: formatActor(row.recipient_alias, row.recipient_id),
+    ruleId: row.matched_rule_id,
+    ruleName: formatRuleName(row.matched_rule_id, row.rules),
+    status: row.send_status === "success" ? "success" : "failed",
+    sentAt: formatDateTime(row.sent_at),
+    replyText: row.sent_text,
+    replyLink: row.sent_link ?? "",
+    failureReason: row.error_message ?? "",
+    metaResponse: formatMetaResponse(row.meta_response_payload),
+  };
+}
+
 export async function listRules() {
   const rows = await supabaseRequest<RuleRow[]>(
     "/rest/v1/rules?select=*&order=priority.desc,updated_at.desc",
@@ -211,6 +311,32 @@ export async function deleteRule(id: string) {
   await supabaseRequest<void>(`/rest/v1/rules?id=eq.${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+export async function listIncomingLogs() {
+  const rows = await supabaseRequest<IncomingLogRow[]>(
+    [
+      "/rest/v1/incoming_messages",
+      "?select=id,sender_id,sender_alias,message_text,platform_message_id,matched_rule_id,match_status,received_at,rules(name)",
+      "&order=received_at.desc",
+      "&limit=200",
+    ].join(""),
+  );
+
+  return rows.map(toIncomingLogView);
+}
+
+export async function listOutgoingLogs() {
+  const rows = await supabaseRequest<OutgoingLogRow[]>(
+    [
+      "/rest/v1/outgoing_messages",
+      "?select=id,recipient_id,recipient_alias,matched_rule_id,sent_text,sent_link,send_status,error_message,meta_response_payload,sent_at,rules(name)",
+      "&order=sent_at.desc",
+      "&limit=200",
+    ].join(""),
+  );
+
+  return rows.map(toOutgoingLogView);
 }
 
 export async function runRemoteMatch(text: string) {
