@@ -1,6 +1,6 @@
-// 자동응답 규칙 목록과 필터를 렌더링합니다.
+// 자동응답 규칙 목록을 Supabase 실데이터 또는 로컬 목업으로 렌더링합니다.
 import { Plus, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import rulesData from "../../public/data/routes/rules.json";
@@ -21,17 +21,74 @@ import {
 } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
-import { normalizeMockMode, useMockPageState } from "../lib/mock-state";
+import {
+  getSupabaseStatusLabel,
+  isSupabaseConfigured,
+  listRules,
+  MatchType,
+  RuleView,
+  updateRule as updateRemoteRule,
+} from "../lib/supabase-rest";
+import {
+  normalizeMockMode,
+  PageState,
+  useMockPageState,
+} from "../lib/mock-state";
 
-type Rule = (typeof rulesData.view.rules)[number];
+type LocalRule = (typeof rulesData.view.rules)[number];
 type StatusFilter = "all" | "active" | "inactive";
+
+const usesSupabase = isSupabaseConfigured();
+
+function toFallbackRule(rule: LocalRule): RuleView {
+  return {
+    id: rule.id,
+    name: rule.name,
+    description: "",
+    matchType: rule.matchType as MatchType,
+    keywords: rule.keywords,
+    triggerKeywords: rule.keywords,
+    replyText: rule.replyText,
+    replyLink: "",
+    priority: rule.priority,
+    isActive: rule.isActive,
+    updatedAt: rule.updatedAt,
+  };
+}
 
 export default function RulesPage() {
   const navigate = useNavigate();
   const mock = useMockPageState(normalizeMockMode(rulesData.__mock.mode));
-  const [rules, setRules] = useState<Rule[]>(rulesData.view.rules);
+  const [pageState, setPageState] = useState<PageState>(
+    usesSupabase ? "loading" : "initial",
+  );
+  const [rules, setRules] = useState<RuleView[]>(
+    rulesData.view.rules.map(toFallbackRule),
+  );
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [pendingRuleId, setPendingRuleId] = useState<string | null>(null);
+  const state = usesSupabase ? pageState : mock.state;
+
+  const loadRules = useCallback(async () => {
+    if (!usesSupabase) {
+      return;
+    }
+
+    setPageState("loading");
+    try {
+      const remoteRules = await listRules();
+      setRules(remoteRules);
+      setPageState(remoteRules.length > 0 ? "success" : "empty");
+    } catch (error) {
+      setPageState("error");
+      toast.error(error instanceof Error ? error.message : "규칙 조회에 실패했습니다.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadRules();
+  }, [loadRules]);
 
   const filteredRules = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -50,26 +107,46 @@ export default function RulesPage() {
     });
   }, [rules, search, status]);
 
-  function toggleRule(rule: Rule) {
-    setRules((current) =>
-      current.map((item) =>
-        item.id === rule.id ? { ...item, isActive: !item.isActive } : item,
-      ),
-    );
-    toast.success(
-      `${rule.name} 규칙을 ${rule.isActive ? "비활성화" : "활성화"}했습니다.`,
-    );
+  async function toggleRule(rule: RuleView) {
+    if (!usesSupabase) {
+      setRules((current) =>
+        current.map((item) =>
+          item.id === rule.id ? { ...item, isActive: !item.isActive } : item,
+        ),
+      );
+      toast.success(
+        `${rule.name} 규칙을 ${rule.isActive ? "비활성화" : "활성화"}했습니다.`,
+      );
+      return;
+    }
+
+    setPendingRuleId(rule.id);
+    try {
+      const updated = await updateRemoteRule(rule.id, {
+        isActive: !rule.isActive,
+      });
+      setRules((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      toast.success(
+        `${updated.name} 규칙을 ${updated.isActive ? "활성화" : "비활성화"}했습니다.`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "규칙 상태 변경에 실패했습니다.");
+    } finally {
+      setPendingRuleId(null);
+    }
   }
 
   return (
     <PageFrame
       title={rulesData.page.title}
       subtitle={rulesData.page.subtitle}
-      state={mock.state}
-      onReload={mock.reload}
-      onShowSuccess={mock.showSuccess}
-      onShowEmpty={mock.showEmpty}
-      onShowError={mock.showError}
+      state={state}
+      onReload={usesSupabase ? loadRules : mock.reload}
+      onShowSuccess={() => (usesSupabase ? setPageState("success") : mock.showSuccess())}
+      onShowEmpty={() => (usesSupabase ? setPageState("empty") : mock.showEmpty())}
+      onShowError={() => (usesSupabase ? setPageState("error") : mock.showError())}
       actions={
         <Button onClick={() => navigate("/rules/new")}>
           <Plus className="h-4 w-4" />
@@ -77,20 +154,22 @@ export default function RulesPage() {
         </Button>
       }
     >
-      {mock.state === "initial" || mock.state === "loading" ? (
+      {state === "initial" || state === "loading" ? (
         <LoadingBlock rows={5} />
-      ) : mock.state === "error" ? (
+      ) : state === "error" ? (
         <ErrorState
-          description="규칙 목록 더미 데이터를 표시하지 못한 상태입니다."
-          onRetry={mock.reload}
+          description={
+            usesSupabase
+              ? "Supabase 규칙 데이터를 불러오지 못했습니다. 환경변수와 RLS 정책을 확인하세요."
+              : "규칙 목록 더미 데이터를 표시하지 못한 상태입니다."
+          }
+          onRetry={usesSupabase ? loadRules : mock.reload}
         />
       ) : (
         <Card>
           <CardHeader>
             <CardTitle>등록된 규칙</CardTitle>
-            <CardDescription>
-              검색과 상태 필터는 로컬 상태로만 적용됩니다.
-            </CardDescription>
+            <CardDescription>{getSupabaseStatusLabel()}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -117,7 +196,7 @@ export default function RulesPage() {
               </Select>
             </div>
 
-            {mock.state === "empty" || filteredRules.length === 0 ? (
+            {state === "empty" || filteredRules.length === 0 ? (
               <EmptyState
                 title="조건에 맞는 규칙이 없습니다."
                 description="검색어를 지우거나 새 규칙을 만들어 운영 기준을 추가하세요."
@@ -165,9 +244,10 @@ export default function RulesPage() {
                           <Button
                             variant={rule.isActive ? "secondary" : "outline"}
                             size="sm"
+                            disabled={pendingRuleId === rule.id}
                             onClick={(event) => {
                               event.stopPropagation();
-                              toggleRule(rule);
+                              void toggleRule(rule);
                             }}
                           >
                             {rule.isActive ? "ON" : "OFF"}

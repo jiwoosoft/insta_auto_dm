@@ -1,6 +1,6 @@
-// 기존 자동응답 규칙 상세와 수정 폼을 렌더링합니다.
+// 기존 자동응답 규칙을 Supabase 또는 로컬 목업 상태로 수정합니다.
 import { Check, Plus, Trash2, X } from "lucide-react";
-import { KeyboardEvent, useState } from "react";
+import { KeyboardEvent, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import ruleDetailData from "../../public/data/routes/rule-detail.json";
@@ -22,24 +22,107 @@ import {
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
-import { normalizeMockMode, useMockPageState } from "../lib/mock-state";
+import {
+  normalizeMockMode,
+  PageState,
+  useMockPageState,
+} from "../lib/mock-state";
+import {
+  deleteRule as deleteRemoteRule,
+  getRule,
+  getSupabaseStatusLabel,
+  isSupabaseConfigured,
+  MatchType,
+  RuleFormInput,
+  RuleView,
+  updateRule as updateRemoteRule,
+} from "../lib/supabase-rest";
 
-type MatchType = "contains" | "exact";
-type Rule = typeof ruleDetailData.view.rule;
+const usesSupabase = isSupabaseConfigured();
+
+function toFallbackRule(ruleId?: string): RuleView {
+  const rule = ruleDetailData.view.rule;
+
+  return {
+    id: ruleId ?? rule.id,
+    name: rule.name,
+    description: rule.description,
+    matchType: rule.matchType as MatchType,
+    keywords: rule.triggerKeywords,
+    triggerKeywords: rule.triggerKeywords,
+    replyText: rule.replyText,
+    replyLink: rule.replyLink,
+    priority: rule.priority,
+    isActive: rule.isActive,
+    updatedAt: rule.updatedAt,
+  };
+}
+
+function toRuleInput(rule: RuleView): RuleFormInput {
+  return {
+    name: rule.name,
+    description: rule.description,
+    matchType: rule.matchType,
+    keywords: rule.triggerKeywords,
+    replyText: rule.replyText,
+    replyLink: rule.replyLink,
+    priority: rule.priority,
+    isActive: rule.isActive,
+  };
+}
 
 export default function RuleDetailPage() {
   const { ruleId } = useParams();
   const navigate = useNavigate();
   const mock = useMockPageState(normalizeMockMode(ruleDetailData.__mock.mode));
+  const [pageState, setPageState] = useState<PageState>(
+    usesSupabase ? "loading" : "initial",
+  );
   const [keywordDraft, setKeywordDraft] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [rule, setRule] = useState<Rule>({
-    ...ruleDetailData.view.rule,
-    id: ruleId ?? ruleDetailData.view.rule.id,
-  });
+  const [rule, setRule] = useState<RuleView>(toFallbackRule(ruleId));
+  const state = usesSupabase ? pageState : mock.state;
 
-  function updateRule<T extends keyof Rule>(key: T, value: Rule[T]) {
+  const loadRule = useCallback(async () => {
+    if (!usesSupabase) {
+      return;
+    }
+    if (!ruleId) {
+      setPageState("empty");
+      return;
+    }
+
+    setPageState("loading");
+    try {
+      const remoteRule = await getRule(ruleId);
+      if (!remoteRule) {
+        setPageState("empty");
+        return;
+      }
+
+      setRule(remoteRule);
+      setPageState("success");
+    } catch (error) {
+      setPageState("error");
+      toast.error(error instanceof Error ? error.message : "규칙 조회에 실패했습니다.");
+    }
+  }, [ruleId]);
+
+  useEffect(() => {
+    void loadRule();
+  }, [loadRule]);
+
+  function updateLocalRule<T extends keyof RuleView>(key: T, value: RuleView[T]) {
     setRule((current) => ({ ...current, [key]: value }));
+  }
+
+  function setKeywords(keywords: string[]) {
+    setRule((current) => ({
+      ...current,
+      keywords,
+      triggerKeywords: keywords,
+    }));
   }
 
   function addKeyword() {
@@ -48,16 +131,11 @@ export default function RuleDetailPage() {
       return;
     }
 
-    setRule((current) => {
-      if (current.triggerKeywords.includes(nextKeyword)) {
-        return current;
-      }
-
-      return {
-        ...current,
-        triggerKeywords: [...current.triggerKeywords, nextKeyword],
-      };
-    });
+    setKeywords(
+      rule.triggerKeywords.includes(nextKeyword)
+        ? rule.triggerKeywords
+        : [...rule.triggerKeywords, nextKeyword],
+    );
     setKeywordDraft("");
   }
 
@@ -69,56 +147,121 @@ export default function RuleDetailPage() {
   }
 
   function removeKeyword(keyword: string) {
-    setRule((current) => ({
-      ...current,
-      triggerKeywords: current.triggerKeywords.filter(
-        (item) => item !== keyword,
-      ),
-    }));
+    setKeywords(rule.triggerKeywords.filter((item) => item !== keyword));
   }
 
-  function saveRule() {
-    toast.success("규칙 수정 내용이 로컬 상태에 저장되었습니다.");
+  function validate() {
+    if (!rule.name.trim()) {
+      toast.error("규칙명을 입력하세요.");
+      return false;
+    }
+    if (rule.triggerKeywords.length === 0) {
+      toast.error("트리거 키워드를 1개 이상 추가하세요.");
+      return false;
+    }
+    if (!rule.replyText.trim()) {
+      toast.error("응답 텍스트를 입력하세요.");
+      return false;
+    }
+
+    return true;
   }
 
-  function toggleActive() {
-    setRule((current) => {
-      const next = { ...current, isActive: !current.isActive };
-      toast.success(`${next.name} 규칙이 ${next.isActive ? "활성" : "비활성"} 상태가 되었습니다.`);
+  async function saveRule() {
+    if (!validate()) {
+      return;
+    }
 
-      return next;
-    });
+    if (!usesSupabase) {
+      toast.success("규칙 수정 내용이 로컬 상태에 저장되었습니다.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const updated = await updateRemoteRule(rule.id, toRuleInput(rule));
+      setRule(updated);
+      toast.success("규칙 수정 내용이 Supabase에 저장되었습니다.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "규칙 저장에 실패했습니다.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  function deleteRule() {
-    setShowDeleteDialog(false);
-    toast.success("규칙 삭제가 로컬 상태에서 처리되었습니다.");
-    navigate("/rules");
+  async function toggleActive() {
+    if (!usesSupabase) {
+      setRule((current) => {
+        const next = { ...current, isActive: !current.isActive };
+        toast.success(`${next.name} 규칙이 ${next.isActive ? "활성" : "비활성"} 상태가 되었습니다.`);
+
+        return next;
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const updated = await updateRemoteRule(rule.id, {
+        isActive: !rule.isActive,
+      });
+      setRule(updated);
+      toast.success(`${updated.name} 규칙이 ${updated.isActive ? "활성" : "비활성"} 상태가 되었습니다.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "규칙 상태 변경에 실패했습니다.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function deleteRule() {
+    if (!usesSupabase) {
+      setShowDeleteDialog(false);
+      toast.success("규칙 삭제가 로컬 상태에서 처리되었습니다.");
+      navigate("/rules");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await deleteRemoteRule(rule.id);
+      setShowDeleteDialog(false);
+      toast.success("규칙이 Supabase에서 삭제되었습니다.");
+      navigate("/rules");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "규칙 삭제에 실패했습니다.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
     <PageFrame
       title={ruleDetailData.page.title}
       subtitle={ruleDetailData.page.subtitle}
-      state={mock.state}
-      onReload={mock.reload}
-      onShowSuccess={mock.showSuccess}
-      onShowEmpty={mock.showEmpty}
-      onShowError={mock.showError}
+      state={state}
+      onReload={usesSupabase ? loadRule : mock.reload}
+      onShowSuccess={() => (usesSupabase ? setPageState("success") : mock.showSuccess())}
+      onShowEmpty={() => (usesSupabase ? setPageState("empty") : mock.showEmpty())}
+      onShowError={() => (usesSupabase ? setPageState("error") : mock.showError())}
       actions={
         <Badge variant={rule.isActive ? "success" : "outline"}>
           {rule.isActive ? "활성" : "비활성"}
         </Badge>
       }
     >
-      {mock.state === "initial" || mock.state === "loading" ? (
+      {state === "initial" || state === "loading" ? (
         <LoadingCard />
-      ) : mock.state === "error" ? (
+      ) : state === "error" ? (
         <ErrorState
-          description="규칙 상세 더미 데이터를 표시하지 못한 상태입니다."
-          onRetry={mock.reload}
+          description={
+            usesSupabase
+              ? "Supabase 규칙 상세를 불러오지 못했습니다. 환경변수와 RLS 정책을 확인하세요."
+              : "규칙 상세 더미 데이터를 표시하지 못한 상태입니다."
+          }
+          onRetry={usesSupabase ? loadRule : mock.reload}
         />
-      ) : mock.state === "empty" ? (
+      ) : state === "empty" ? (
         <EmptyState
           title="해당 규칙 데이터가 없습니다."
           description="규칙 목록에서 다시 상세 화면으로 진입하세요."
@@ -136,14 +279,16 @@ export default function RuleDetailPage() {
                 <CardTitle>{rule.name}</CardTitle>
                 <Badge variant="secondary">우선순위 {rule.priority}</Badge>
               </div>
-              <CardDescription>규칙 ID: {rule.id}</CardDescription>
+              <CardDescription>
+                {getSupabaseStatusLabel()} · 규칙 ID: {rule.id}
+              </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 xl:grid-cols-2">
               <label className="space-y-2">
                 <span className="text-sm font-medium">규칙명</span>
                 <Input
                   value={rule.name}
-                  onChange={(event) => updateRule("name", event.target.value)}
+                  onChange={(event) => updateLocalRule("name", event.target.value)}
                 />
               </label>
               <label className="space-y-2">
@@ -151,7 +296,7 @@ export default function RuleDetailPage() {
                 <Select
                   value={rule.matchType}
                   onChange={(event) =>
-                    updateRule("matchType", event.target.value as MatchType)
+                    updateLocalRule("matchType", event.target.value as MatchType)
                   }
                 >
                   <option value="contains">포함</option>
@@ -163,7 +308,7 @@ export default function RuleDetailPage() {
                 <Input
                   value={rule.description}
                   onChange={(event) =>
-                    updateRule("description", event.target.value)
+                    updateLocalRule("description", event.target.value)
                   }
                 />
               </label>
@@ -224,7 +369,7 @@ export default function RuleDetailPage() {
                 <Textarea
                   value={rule.replyText}
                   onChange={(event) =>
-                    updateRule("replyText", event.target.value)
+                    updateLocalRule("replyText", event.target.value)
                   }
                 />
               </label>
@@ -233,7 +378,7 @@ export default function RuleDetailPage() {
                 <Input
                   value={rule.replyLink}
                   onChange={(event) =>
-                    updateRule("replyLink", event.target.value)
+                    updateLocalRule("replyLink", event.target.value)
                   }
                 />
               </label>
@@ -244,7 +389,7 @@ export default function RuleDetailPage() {
                   value={rule.priority}
                   min={1}
                   onChange={(event) =>
-                    updateRule("priority", Number(event.target.value))
+                    updateLocalRule("priority", Number(event.target.value))
                   }
                 />
               </label>
@@ -255,7 +400,7 @@ export default function RuleDetailPage() {
             <CardHeader>
               <CardTitle>최근 매칭 이력</CardTitle>
               <CardDescription>
-                이 규칙이 최근 반응한 DM 목록입니다.
+                이 목록은 아직 참고용 목업이며 로그 화면 실데이터 연결 단계에서 통합됩니다.
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
@@ -289,18 +434,23 @@ export default function RuleDetailPage() {
           <div className="flex flex-wrap justify-between gap-2">
             <Button
               variant="destructive"
+              disabled={isSaving}
               onClick={() => setShowDeleteDialog(true)}
             >
               <Trash2 className="h-4 w-4" />
               {ruleDetailData.actions.archiveLabel}
             </Button>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={toggleActive}>
+              <Button
+                variant="outline"
+                disabled={isSaving}
+                onClick={() => void toggleActive()}
+              >
                 {rule.isActive ? "비활성화" : "활성화"}
               </Button>
-              <Button onClick={saveRule}>
+              <Button disabled={isSaving} onClick={() => void saveRule()}>
                 <Check className="h-4 w-4" />
-                {ruleDetailData.actions.saveLabel}
+                {isSaving ? "저장 중" : ruleDetailData.actions.saveLabel}
               </Button>
             </div>
           </div>
@@ -311,7 +461,7 @@ export default function RuleDetailPage() {
                 <CardHeader>
                   <CardTitle>규칙을 삭제할까요?</CardTitle>
                   <CardDescription>
-                    기존 수신과 발송 로그는 보존되는 것으로 시뮬레이션됩니다.
+                    기존 수신과 발송 로그는 유지되고 규칙 참조만 비워집니다.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex justify-end gap-2">
@@ -321,7 +471,11 @@ export default function RuleDetailPage() {
                   >
                     취소
                   </Button>
-                  <Button variant="destructive" onClick={deleteRule}>
+                  <Button
+                    variant="destructive"
+                    disabled={isSaving}
+                    onClick={() => void deleteRule()}
+                  >
                     삭제
                   </Button>
                 </CardContent>

@@ -314,16 +314,15 @@ Deno.serve(async (req) => {
 
     // settings + rules 병렬 조회
     const [{ data: settings, error: settingsErr }, { data: rules, error: rulesErr }] = await Promise.all([
-      supabase.from('integration_settings').select('test_mode, fallback_reply, dedupe_window').single(),
+      supabase.from('integration_settings').select('test_mode, dedupe_window').single(),
       supabase.from('rules').select('id, name, match_type, trigger_keywords, reply_text, reply_link, priority').eq('is_active', true).order('priority', { ascending: false }),
     ])
 
     if (settingsErr) console.error(`[process] integration_settings fetch FAILED`, settingsErr.message)
     if (rulesErr)    console.error(`[process] rules fetch FAILED`, rulesErr.message)
 
-    const testMode: boolean            = settings?.test_mode ?? false
-    const fallbackReply: string | null = settings?.fallback_reply ?? null
-    console.log(`[process] settings loaded test_mode=${testMode} fallback=${fallbackReply ? 'yes' : 'no'} rules=${rules?.length ?? 0}개`)
+    const testMode: boolean = settings?.test_mode ?? false
+    console.log(`[process] settings loaded test_mode=${testMode} rules=${rules?.length ?? 0}개`)
 
     for (const entry of payload.entry ?? []) {
       for (const event of entry.messaging ?? []) {
@@ -363,7 +362,7 @@ Deno.serve(async (req) => {
         if (matchResult) {
           console.log(`[match] HIT rule="${matchResult.rule.name}" keyword="${matchResult.keyword}" type=${matchResult.rule.match_type}`)
         } else {
-          console.log(`[match] MISS → ${fallbackReply ? 'fallback reply' : 'no reply'}`)
+          console.log(`[match] MISS → save incoming only, no auto reply`)
         }
 
         // incoming_messages 저장
@@ -387,26 +386,19 @@ Deno.serve(async (req) => {
         }
         console.log(`[incoming] saved id=${incomingLog.id}`)
 
-        // 발송
-        if (matchResult) {
-          await sendAndLog({
-            incomingLogId: incomingLog.id,
-            recipientId: senderId,
-            ruleId: matchResult.rule.id,
-            replyText: matchResult.rule.reply_text,
-            replyLink: matchResult.rule.reply_link,
-            testMode,
-          })
-        } else if (fallbackReply) {
-          await sendAndLog({
-            incomingLogId: incomingLog.id,
-            recipientId: senderId,
-            ruleId: null,
-            replyText: fallbackReply,
-            replyLink: null,
-            testMode,
-          })
+        // 발송. 미매칭 메시지는 로그만 저장하고 자동 답변하지 않습니다.
+        if (!matchResult) {
+          continue
         }
+
+        await sendAndLog({
+          incomingLogId: incomingLog.id,
+          recipientId: senderId,
+          ruleId: matchResult.rule.id,
+          replyText: matchResult.rule.reply_text,
+          replyLink: matchResult.rule.reply_link,
+          testMode,
+        })
       }
     }
 

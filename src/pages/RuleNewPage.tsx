@@ -1,5 +1,5 @@
-// 새 자동응답 규칙 생성 폼을 렌더링합니다.
-import { Check, Plus, Trash2, X } from "lucide-react";
+// 새 자동응답 규칙을 Supabase 또는 로컬 목업 상태로 생성합니다.
+import { Check, Plus, X } from "lucide-react";
 import { KeyboardEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -22,22 +22,18 @@ import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
 import { normalizeMockMode, useMockPageState } from "../lib/mock-state";
+import {
+  createRule,
+  getSupabaseStatusLabel,
+  isSupabaseConfigured,
+  MatchType,
+  RuleFormInput,
+} from "../lib/supabase-rest";
 import { cn } from "../lib/utils";
 
-type MatchType = "contains" | "exact";
-
-type RuleForm = {
-  name: string;
-  description: string;
-  matchType: MatchType;
-  keywords: string[];
-  replyText: string;
-  replyLink: string;
-  priority: number;
-  isActive: boolean;
-};
-
 type FormErrors = Partial<Record<"name" | "keywords" | "replyText", string>>;
+
+const usesSupabase = isSupabaseConfigured();
 
 export default function RuleNewPage() {
   const navigate = useNavigate();
@@ -46,7 +42,7 @@ export default function RuleNewPage() {
   const [keywordDraft, setKeywordDraft] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [form, setForm] = useState<RuleForm>({
+  const [form, setForm] = useState<RuleFormInput>({
     name: defaults.defaultName,
     description: defaults.defaultDescription,
     matchType: defaults.defaultMatchType as MatchType,
@@ -58,7 +54,10 @@ export default function RuleNewPage() {
   });
   const visibleKeywords = mock.state === "empty" ? [] : form.keywords;
 
-  function updateForm<T extends keyof RuleForm>(key: T, value: RuleForm[T]) {
+  function updateForm<T extends keyof RuleFormInput>(
+    key: T,
+    value: RuleFormInput[T],
+  ) {
     setForm((current) => ({ ...current, [key]: value }));
     setErrors((current) => ({ ...current, [key]: undefined }));
   }
@@ -99,7 +98,7 @@ export default function RuleNewPage() {
     if (!form.name.trim()) {
       nextErrors.name = "규칙명을 입력하세요.";
     }
-    if (visibleKeywords.length === 0) {
+    if (form.keywords.length === 0) {
       nextErrors.keywords = "트리거 키워드를 1개 이상 추가하세요.";
     }
     if (!form.replyText.trim()) {
@@ -110,18 +109,30 @@ export default function RuleNewPage() {
     return Object.keys(nextErrors).length === 0;
   }
 
-  function save(goList: boolean) {
+  async function save(goList: boolean) {
     if (!validate()) {
       toast.error("필수 입력값을 확인해주세요.");
       return;
     }
 
     setIsSaving(true);
-    window.setTimeout(() => {
+    try {
+      if (usesSupabase) {
+        const created = await createRule(form);
+        toast.success("새 규칙이 Supabase에 저장되었습니다.");
+        navigate(goList ? "/rules" : `/rules/${created.id}`);
+        return;
+      }
+
+      window.setTimeout(() => {
+        toast.success("새 규칙이 로컬 상태에 저장되었습니다.");
+        navigate(goList ? "/rules" : "/rules/price");
+      }, 520);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "규칙 저장에 실패했습니다.");
+    } finally {
       setIsSaving(false);
-      toast.success("새 규칙이 로컬 상태에 저장되었습니다.");
-      navigate(goList ? "/rules" : "/rules/price");
-    }, 520);
+    }
   }
 
   return (
@@ -146,9 +157,7 @@ export default function RuleNewPage() {
           <Card>
             <CardHeader>
               <CardTitle>기본 정보</CardTitle>
-              <CardDescription>
-                운영자가 목록에서 이해할 수 있는 이름과 매칭 방식을 설정합니다.
-              </CardDescription>
+              <CardDescription>{getSupabaseStatusLabel()}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 xl:grid-cols-2">
               <label className="space-y-2">
@@ -313,11 +322,11 @@ export default function RuleNewPage() {
             <Button
               variant="secondary"
               disabled={isSaving}
-              onClick={() => save(true)}
+              onClick={() => void save(true)}
             >
               {ruleNewData.actions.submitAndListLabel}
             </Button>
-            <Button disabled={isSaving} onClick={() => save(false)}>
+            <Button disabled={isSaving} onClick={() => void save(false)}>
               {isSaving ? "저장 중" : ruleNewData.actions.submitLabel}
             </Button>
           </div>

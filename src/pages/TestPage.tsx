@@ -1,4 +1,4 @@
-// 테스트 문장과 규칙 매칭 결과를 렌더링합니다.
+// 테스트 문장과 실제 또는 목업 규칙 매칭 결과를 렌더링합니다.
 import { ArrowRight, FlaskConical, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -20,21 +20,35 @@ import {
 } from "../components/ui/card";
 import { Textarea } from "../components/ui/textarea";
 import { normalizeMockMode, useMockPageState } from "../lib/mock-state";
+import {
+  getSupabaseStatusLabel,
+  isSupabaseConfigured,
+  runRemoteMatch,
+} from "../lib/supabase-rest";
 
 type MockRule = (typeof testData.view.mockRules)[number];
 type ResultState = "initial" | "loading" | "success" | "empty" | "error";
+type MatchedRuleView = {
+  ruleId: string;
+  ruleName: string;
+  replyText: string;
+  replyLink: string;
+  priority: number;
+};
+
+const usesSupabase = isSupabaseConfigured();
 
 export default function TestPage() {
   const navigate = useNavigate();
   const mock = useMockPageState(normalizeMockMode(testData.__mock.mode));
   const [input, setInput] = useState(testData.view.defaultInput);
   const [resultState, setResultState] = useState<ResultState>("initial");
-  const [matchedRule, setMatchedRule] = useState<MockRule | null>(null);
+  const [matchedRule, setMatchedRule] = useState<MatchedRuleView | null>(null);
   const [matchedKeyword, setMatchedKeyword] = useState("");
   const effectiveResultState =
     mock.state === "empty" ? "empty" : resultState;
 
-  function findMatch(value: string) {
+  function findLocalMatch(value: string) {
     const normalized = value.trim().toLowerCase();
     const rules = [...testData.view.mockRules].sort(
       (a, b) => b.priority - a.priority,
@@ -59,7 +73,7 @@ export default function TestPage() {
     return null;
   }
 
-  function runTest() {
+  async function runTest() {
     if (!input.trim()) {
       setResultState("empty");
       setMatchedRule(null);
@@ -68,26 +82,51 @@ export default function TestPage() {
     }
 
     setResultState("loading");
-    window.setTimeout(() => {
-      if (input.includes("오류")) {
-        setResultState("error");
-        setMatchedRule(null);
+    setMatchedRule(null);
+    setMatchedKeyword("");
+
+    try {
+      if (usesSupabase) {
+        const result = await runRemoteMatch(input);
+        if (!result.matched) {
+          setResultState("empty");
+          return;
+        }
+
+        setMatchedRule({
+          ruleId: result.rule.id,
+          ruleName: result.rule.name,
+          replyText: result.rule.reply_text,
+          replyLink: result.rule.reply_link ?? "",
+          priority: result.rule.priority,
+        });
+        setMatchedKeyword(result.matched_keyword);
+        setResultState("success");
+        toast.success(`${result.rule.name} 규칙이 매칭되었습니다.`);
         return;
       }
 
-      const result = findMatch(input);
+      window.setTimeout(() => {
+        if (input.includes("오류")) {
+          setResultState("error");
+          return;
+        }
 
-      if (!result) {
-        setResultState("empty");
-        setMatchedRule(null);
-        return;
-      }
+        const result = findLocalMatch(input);
+        if (!result) {
+          setResultState("empty");
+          return;
+        }
 
-      setMatchedRule(result.rule);
-      setMatchedKeyword(result.keyword);
-      setResultState("success");
-      toast.success(`${result.rule.ruleName} 규칙이 매칭되었습니다.`);
-    }, 520);
+        setMatchedRule(toMatchedRuleView(result.rule));
+        setMatchedKeyword(result.keyword);
+        setResultState("success");
+        toast.success(`${result.rule.ruleName} 규칙이 매칭되었습니다.`);
+      }, 520);
+    } catch (error) {
+      setResultState("error");
+      toast.error(error instanceof Error ? error.message : "테스트 매칭에 실패했습니다.");
+    }
   }
 
   function resetTest() {
@@ -120,9 +159,7 @@ export default function TestPage() {
             <Card>
               <CardHeader>
                 <CardTitle>테스트 입력</CardTitle>
-                <CardDescription>
-                  실제 DM 발송 없이 로컬 상태에서만 매칭 결과를 계산합니다.
-                </CardDescription>
+                <CardDescription>{getSupabaseStatusLabel()}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Textarea
@@ -131,7 +168,7 @@ export default function TestPage() {
                   placeholder="예: 배송은 얼마나 걸리나요?"
                 />
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={runTest}>
+                  <Button onClick={() => void runTest()}>
                     <FlaskConical className="h-4 w-4" />
                     {testData.actions.runLabel}
                   </Button>
@@ -179,6 +216,16 @@ export default function TestPage() {
   );
 }
 
+function toMatchedRuleView(rule: MockRule): MatchedRuleView {
+  return {
+    ruleId: rule.ruleId,
+    ruleName: rule.ruleName,
+    replyText: rule.replyText,
+    replyLink: rule.replyLink,
+    priority: rule.priority,
+  };
+}
+
 function ResultCard({
   state,
   matchedRule,
@@ -186,7 +233,7 @@ function ResultCard({
   onGoRule,
 }: {
   state: ResultState;
-  matchedRule: MockRule | null;
+  matchedRule: MatchedRuleView | null;
   matchedKeyword: string;
   onGoRule: () => void;
 }) {
@@ -200,7 +247,7 @@ function ResultCard({
         <CardHeader>
           <CardTitle>{testData.view.resultPreview.empty.title}</CardTitle>
           <CardDescription>
-            {testData.view.resultPreview.empty.description}
+            규칙에 매칭되지 않았으므로 자동 발송 대상이 아닙니다.
           </CardDescription>
         </CardHeader>
         <CardContent>

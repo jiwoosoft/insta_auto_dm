@@ -81,3 +81,24 @@
 - 현재 프론트엔드는 로컬 JSON 기반 목업이고, DB와 Edge Function은 Supabase에 구축 및 배포된 상태다.
 - README 작성 후 민감정보 패턴 검색, 한국어 문장 끝 콜론 검색, `git diff --check`를 통과했다.
 - 이번 변경은 문서만 수정했으므로 프론트엔드 빌드는 새로 실행하지 않았다.
+
+## 2026-05-29 규칙 시스템 정밀 점검
+
+- 사용자가 보고한 첫 번째 문제는 원격 `instagram-webhook` 코드의 fallback 발송 분기와 일치한다. `matchResult`가 없더라도 `fallbackReply`가 있으면 `sendAndLog`를 호출한다.
+- DB `integration_settings.fallback_reply`는 `문의 감사합니다. 담당자가 확인 후 답변드리겠습니다.`로 항상 채워져 있어 미매칭 메시지도 자동답변이 발송된다.
+- 실제 발송 로그에서도 `학교`, `hi`, `사랑`, `금액`, `테스트` 같은 미매칭 메시지가 `matched_rule_id=null` 상태로 같은 fallback 답변을 받은 기록이 확인됐다.
+- 활성 규칙 자체는 여러 개가 있고, 매칭된 메시지에는 각 규칙별 답변이 나간 기록도 있다. 사용자가 체감한 "항상 같은 답변"은 미매칭 fallback이 무조건 발송된 결과로 보는 것이 타당하다.
+- 로컬웹의 규칙 생성, 수정, 삭제, 토글은 모두 `public/data/routes/*.json`과 React 로컬 state만 사용한다. Supabase DB로 쓰기 요청을 보내는 코드가 없어서 실제 운영 규칙은 변경되지 않는다.
+- 수정 방향은 `instagram-webhook`에서 미매칭 메시지는 수신 로그만 남기고 발송하지 않도록 바꾸고, 프론트 규칙 화면은 Supabase REST API 기반 CRUD로 연결하는 것이다.
+- `src/lib/supabase-rest.ts`를 추가해 `rules` CRUD와 `test-match` 호출을 구현했다.
+- `RulesPage`, `RuleNewPage`, `RuleDetailPage`, `TestPage`는 Supabase 환경변수가 있으면 실데이터를 사용하고, 없으면 기존 목업으로 동작한다.
+- `.env.local`에는 로컬 실행용 Supabase URL과 publishable key를 설정했고, `.env.example`에는 placeholder만 커밋 대상으로 추가했다.
+- `supabase/functions/instagram-webhook/index.ts`에는 미매칭 메시지 발송을 제거한 수정본을 추가했다.
+- Supabase MCP 배포 시도는 현재 MCP URL이 `read_only=true`라 `Cannot deploy an edge function in read-only mode.`로 실패했다.
+- Supabase CLI도 로컬 PATH에 `npx`가 없어 사용할 수 없었다.
+- 공식 Management API의 `POST /v1/projects/{ref}/functions/deploy`에 multipart form-data로 `index.ts`와 metadata를 보내 `instagram-webhook`을 재배포했다.
+- 재배포 결과 `instagram-webhook`은 version 4, `verify_jwt=false`, `status=ACTIVE`로 확인됐다.
+- `rules`, `incoming_messages`, `outgoing_messages`, `integration_settings`는 현재 RLS가 비활성화되어 있다.
+- `.env.local`의 publishable key로 `rules`에 임시 규칙을 생성, 수정, 삭제했고 삭제 후 남은 row가 없음을 확인했다.
+- `test-match` 원격 함수는 미매칭 입력에 `matched:false`를 반환했다. 현재 프론트 테스트 화면은 이 경우 자동 발송 대상이 아니라고 표시한다.
+- Codex 번들 Node로 `tsc -b`와 `vite build`를 실행했고 통과했다.

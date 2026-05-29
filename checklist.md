@@ -74,3 +74,18 @@
 - [x] 민감정보가 포함되지 않았는지 확인.
 - [x] 문서 diff 검증.
 - [x] 작업 기록 커밋.
+
+## 추가 체크리스트. 규칙 시스템 정밀 점검과 수정
+
+- [x] 현재 프론트엔드 규칙 화면 코드 확인.
+- [x] 원격 Supabase Edge Function 코드 확인.
+- [x] 원격 DB 설정, 규칙, 수신/발송 로그 상태 확인.
+- [x] 자동답변 오작동 원인 정리.
+- [x] 로컬웹 수정/삭제 미동작 원인 정리.
+- [x] `instagram-webhook` 미매칭 fallback 자동 발송 제거.
+- [x] 프론트엔드 규칙 CRUD를 Supabase 실데이터에 연결.
+- [x] `/test` 화면을 원격 `test-match` 함수에 연결.
+- [x] 빌드와 핵심 동작 검증.
+- [x] Supabase Management API로 `instagram-webhook` version 4 재배포.
+- [x] 프론트 publishable key 기반 REST 규칙 생성, 수정, 삭제 스모크 테스트.
+- [x] 작업 기록 커밋.
