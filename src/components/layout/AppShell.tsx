@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { isSupabaseConfigured } from "../../lib/supabase-rest";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
@@ -36,6 +37,7 @@ function getInitialTheme(): ThemeMode {
 export function AppShell() {
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const isDark = theme === "dark";
+  const hasSupabase = isSupabaseConfigured();
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -74,7 +76,9 @@ export function AppShell() {
               )}
               {isDark ? "라이트" : "다크"}
             </Button>
-            <Badge variant="success">Local Mock Run</Badge>
+            <Badge variant={hasSupabase ? "success" : "warning"}>
+              {hasSupabase ? "Supabase 연결" : "목업 모드"}
+            </Badge>
           </div>
         </div>
       </header>
@@ -110,7 +114,9 @@ export function AppShell() {
             </div>
           </main>
           <footer className="border-t bg-card px-6 py-4 text-xs text-muted-foreground">
-            Mock UI for local internal testing
+            {hasSupabase
+              ? "Supabase 실데이터와 연결된 관리자 화면입니다."
+              : "Supabase 환경변수가 없어 목업 데이터만 표시됩니다."}
           </footer>
         </div>
       </div>

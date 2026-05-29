@@ -173,7 +173,7 @@ export default function RuleDetailPage() {
     }
 
     if (!usesSupabase) {
-      toast.success("규칙 수정 내용이 로컬 상태에 저장되었습니다.");
+      toast.error("Supabase 환경변수가 없어 규칙 수정 내용을 실제 DB에 저장할 수 없습니다.");
       return;
     }
 
@@ -191,12 +191,7 @@ export default function RuleDetailPage() {
 
   async function toggleActive() {
     if (!usesSupabase) {
-      setRule((current) => {
-        const next = { ...current, isActive: !current.isActive };
-        toast.success(`${next.name} 규칙이 ${next.isActive ? "활성" : "비활성"} 상태가 되었습니다.`);
-
-        return next;
-      });
+      toast.error("Supabase 환경변수가 없어 규칙 활성 상태를 실제 DB에 저장할 수 없습니다.");
       return;
     }
 
@@ -217,8 +212,7 @@ export default function RuleDetailPage() {
   async function deleteRule() {
     if (!usesSupabase) {
       setShowDeleteDialog(false);
-      toast.success("규칙 삭제가 로컬 상태에서 처리되었습니다.");
-      navigate("/rules");
+      toast.error("Supabase 환경변수가 없어 규칙을 실제 DB에서 삭제할 수 없습니다.");
       return;
     }
 

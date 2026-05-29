@@ -89,3 +89,12 @@
 - [x] Supabase Management API로 `instagram-webhook` version 4 재배포.
 - [x] 프론트 publishable key 기반 REST 규칙 생성, 수정, 삭제 스모크 테스트.
 - [x] 작업 기록 커밋.
+
+## 추가 체크리스트. 규칙 CRUD 웹 동작 재점검
+
+- [x] 규칙 신규 생성, 수정, 삭제 화면 코드 재확인.
+- [x] 로컬 실행 환경과 Supabase 환경변수 적용 상태 확인.
+- [x] 웹 UI에서 실제 생성, 수정, 삭제 흐름 재현.
+- [x] 원인 수정.
+- [x] 빌드와 핵심 동작 검증.
+- [x] 작업 기록 커밋.

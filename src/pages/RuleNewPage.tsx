@@ -124,10 +124,7 @@ export default function RuleNewPage() {
         return;
       }
 
-      window.setTimeout(() => {
-        toast.success("새 규칙이 로컬 상태에 저장되었습니다.");
-        navigate(goList ? "/rules" : "/rules/price");
-      }, 520);
+      toast.error("Supabase 환경변수가 없어 새 규칙을 실제 DB에 저장할 수 없습니다.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "규칙 저장에 실패했습니다.");
     } finally {

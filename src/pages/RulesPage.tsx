@@ -109,14 +109,7 @@ export default function RulesPage() {
 
   async function toggleRule(rule: RuleView) {
     if (!usesSupabase) {
-      setRules((current) =>
-        current.map((item) =>
-          item.id === rule.id ? { ...item, isActive: !item.isActive } : item,
-        ),
-      );
-      toast.success(
-        `${rule.name} 규칙을 ${rule.isActive ? "비활성화" : "활성화"}했습니다.`,
-      );
+      toast.error("Supabase 환경변수가 없어 실제 규칙 상태를 변경할 수 없습니다.");
       return;
     }
 
